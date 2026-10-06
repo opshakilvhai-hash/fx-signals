@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>FX Signals</title>
 <style>
-  /* Layout: single column of signal cards on phones, two columns from 700px. Dark-first, light follows the phone setting. */
+  /* Layout: controls on top (mode, timeframe, pairs, mode-specific inputs), then signal cards. One column on phones, two from 700px. Dark-first, light follows the phone setting. */
   :root {
     --bg: #0e1511; --surface: #16201a; --inset: #0e1511; --line: #26352c;
     --text: #e6efe9; --muted: #8fa196;
@@ -38,7 +38,7 @@
   header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
   h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
   .muted { color: var(--muted); font-size: 13px; margin: 2px 0 0; }
-  .actions { display: flex; gap: 8px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
   button {
     font: inherit; font-size: 13px; font-weight: 600; color: var(--text);
     background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
@@ -47,9 +47,21 @@
   button.primary { background: var(--buy); color: var(--on-signal); border-color: transparent; }
   button:disabled { opacity: .5; cursor: default; }
   button:focus-visible, input:focus-visible { outline: 2px solid var(--buy); outline-offset: 2px; }
+  button[aria-pressed="true"] { background: var(--buy); color: var(--on-signal); border-color: transparent; }
   .notice {
     margin: 0; padding: 10px 12px; border-radius: 8px; font-size: 12.5px; line-height: 1.55;
     background: var(--warn-bg); color: var(--warn);
+  }
+  #alerts { margin: 0; padding: 10px 12px; border-radius: 8px; font-size: 14px; font-weight: 600; background: var(--surface); border: 1px solid var(--buy); }
+  .controls { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .group { display: flex; flex-direction: column; gap: 6px; }
+  .group > .lbl { font-size: 12px; color: var(--muted); }
+  .seg, .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .seg button { flex: 1 1 0; min-width: 64px; }
+  .inline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+  input[type=number] {
+    width: 84px; font: inherit; font-size: 14px; color: var(--text);
+    background: var(--inset); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px;
   }
   #setup { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
   #setup h2 { margin: 0; font-size: 16px; }
@@ -69,6 +81,7 @@
   .badge { font-weight: 700; font-size: 13px; padding: 3px 12px; border-radius: 6px; color: var(--on-signal); letter-spacing: .04em; }
   .BUY { background: var(--buy); } .SELL { background: var(--sell); } .HOLD { background: var(--hold); color: #fff; }
   .price { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .cta { background: var(--inset); border-radius: 8px; padding: 10px 12px; font-size: 14px; font-weight: 600; }
   .levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .lv { background: var(--inset); border-radius: 8px; padding: 8px 6px; text-align: center; min-width: 0; }
   .lv small { display: block; color: var(--muted); font-size: 11px; }
@@ -79,7 +92,7 @@
   .track::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--line); }
   .fill { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
   .bt { font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 8px; line-height: 1.6; font-variant-numeric: tabular-nums; }
-  .tag { display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 4px; margin-top: 4px; font-weight: 600; }
+  .tag { display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 4px; margin: 4px 4px 0 0; font-weight: 600; }
   .ok { color: var(--buy); border: 1px solid var(--buy); }
   .weak { color: var(--warn); border: 1px solid var(--warn); }
   .err { color: var(--sell); font-size: 13px; margin: 0; overflow-wrap: anywhere; }
@@ -94,11 +107,45 @@
     </div>
     <div class="actions">
       <button id="refresh" type="button">রিফ্রেশ</button>
+      <button id="alertBtn" type="button" aria-pressed="false">অ্যালার্ট</button>
       <button id="settings" type="button">API Key</button>
     </div>
   </header>
 
-  <p class="notice">এগুলো শিক্ষামূলক সিগন্যাল, আর্থিক পরামর্শ নয়। কোনো সিগন্যালই লাভের নিশ্চয়তা দেয় না। রিয়েল টাকায় ট্রেডের আগে ডেমো অ্যাকাউন্টে পরীক্ষা করুন।</p>
+  <p class="notice" id="notice"></p>
+
+  <p id="alerts" role="status" hidden></p>
+
+  <section class="controls" aria-label="সেটিং">
+    <div class="group">
+      <span class="lbl">মোড</span>
+      <div class="seg" id="modeSeg"></div>
+    </div>
+    <div class="group">
+      <span class="lbl">ক্যান্ডেল টাইমফ্রেম</span>
+      <div class="seg" id="tfSeg"></div>
+    </div>
+    <div class="group">
+      <span class="lbl">পেয়ার (ট্যাপ করে বাছুন)</span>
+      <div class="chips" id="chips"></div>
+    </div>
+    <div class="group" id="gExpiry" hidden>
+      <span class="lbl" id="expiryLbl">মেয়াদ (কয় ক্যান্ডেল পরে ফল)</span>
+      <div class="seg" id="expirySeg"></div>
+    </div>
+    <div class="inline" id="gPayout" hidden>
+      <label for="payout">পেআউট %</label>
+      <input type="number" id="payout" min="50" max="100" step="1" inputmode="numeric" value="85">
+      <span class="muted" id="beHint"></span>
+    </div>
+    <div class="inline" id="gSpread">
+      <label for="spread">স্প্রেড (pip)</label>
+      <input type="number" id="spread" min="0" max="20" step="0.1" inputmode="decimal" value="1">
+      <span class="muted">ব্যাকটেস্টে প্রতি ট্রেডে ধরা হয়</span>
+    </div>
+    <p class="muted" id="usage"></p>
+    <p class="muted" id="estimate"></p>
+  </section>
 
   <section id="setup" hidden>
     <h2>প্রথমবার সেটআপ: ফ্রি ডেটা কী</h2>
@@ -111,7 +158,7 @@
       <input type="text" id="keyInput" placeholder="API key পেস্ট করুন" autocomplete="off" autocapitalize="off" spellcheck="false">
       <button id="saveKey" class="primary" type="button">সেভ করুন</button>
     </div>
-    <p class="muted">key শুধু আপনার ফোনের ব্রাউজারে থাকে, কোথাও পাঠানো হয় না (শুধু Twelve Data থেকে ডেটা আনতে ব্যবহার হয়)।</p>
+    <p class="muted">key শুধু আপনার ফোনের ব্রাউজারে থাকে। শুধু Twelve Data থেকে ডেটা আনতে ব্যবহার হয়।</p>
   </section>
 
   <p id="status"></p>
@@ -121,6 +168,13 @@
 <script>
 /*CORE-START*/
 const CFG = { slMult: 1.5, tpMult: 3, horizon: 48, cooldown: 12, threshold: 0.45 };
+const TFS = {
+  "1min":  { label: "১ মিনিট",  ms: 60000,   api: "1min",  min: 1 },
+  "5min":  { label: "৫ মিনিট",  ms: 300000,  api: "5min",  min: 5 },
+  "15min": { label: "১৫ মিনিট", ms: 900000,  api: "15min", min: 15 },
+  "1h":    { label: "১ ঘণ্টা",  ms: 3600000, api: "1h",    min: 60 },
+};
+const DAILY_LIMIT = 800;   // Twelve Data ফ্রি প্ল্যানের দৈনিক ক্রেডিট
 
 function ema(a, span) {
   const k = 2 / (span + 1);
@@ -162,7 +216,7 @@ function indicators(cs) {
 }
 const clip = (x, a = -1, b = 1) => Math.max(a, Math.min(b, x));
 
-/* স্কোর: -1 (জোরালো SELL) থেকে +1 (জোরালো BUY)। ট্রেন্ড ৫০%, MACD গতি ৩০%, RSI ২০%। */
+/* স্কোর: -1 (জোরালো SELL/PUT) থেকে +1 (জোরালো BUY/CALL)। ট্রেন্ড ৫০%, MACD গতি ৩০%, RSI ২০%। */
 function scoreAt(ind, i) {
   const a = ind.atr[i];
   if (!(a > 0)) return 0;
@@ -176,6 +230,7 @@ function scoreAt(ind, i) {
 }
 function signalOf(s) { return s >= CFG.threshold ? "BUY" : s <= -CFG.threshold ? "SELL" : "HOLD"; }
 
+/* ---------- ফরেক্স মোড: SL/TP ---------- */
 /* একটা ট্রেডের ফল R-এ। SL = -1R, TP = +2R। একই ক্যান্ডেলে দুটোই ছুঁলে SL ধরা হয়। */
 function simulate(ind, i, dir) {
   const entry = ind.c[i], a = ind.atr[i];
@@ -191,7 +246,8 @@ function simulate(ind, i, dir) {
   return (dir * (ind.c[end - 1] - entry)) / (a * CFG.slMult);
 }
 
-function backtest(ind) {
+/* costOf(i): স্প্রেডের খরচ R-এ। প্রতিটি ট্রেড থেকে বাদ যায়। */
+function backtest(ind, costOf = () => 0) {
   const res = [];
   let next = 60;
   for (let i = 60; i < ind.c.length - 1; i++) {
@@ -200,7 +256,7 @@ function backtest(ind) {
     if (sg === "HOLD") continue;
     const r = simulate(ind, i, sg === "BUY" ? 1 : -1);
     if (r === null) continue;
-    res.push(r);
+    res.push(r - costOf(i));
     next = i + CFG.cooldown;
   }
   if (!res.length) return { trades: 0, winRate: 0, profitFactor: 0, totalR: 0 };
@@ -215,8 +271,17 @@ function backtest(ind) {
 }
 
 function decimalsFor(pair) { return pair.includes("JPY") ? 3 : 5; }
+function pipSize(pair) { return pair.includes("JPY") ? 0.01 : 0.0001; }
 
-function analyze(pair, candles) {
+/* ক্যান্ডেল বন্ধ হওয়ার ৩ সেকেন্ড পরে নতুন ডেটা আনার সময় হয়। last = শেষ ফেচের সময় (ms)। */
+function bucket(t, tfMs) { return Math.floor((t - 3000) / tfMs); }
+function isDue(now, last, tfMs) { return !last || bucket(now, tfMs) > bucket(last, tfMs); }
+
+function parseT(t) { return new Date(String(t).replace(" ", "T")).getTime(); }
+
+function analyze(pair, candles, opts = {}) {
+  const spreadPips = opts.spreadPips || 0;
+  const pip = pipSize(pair);
   const cs = candles.slice(0, -1);              // শেষ ক্যান্ডেল চলমান, তাই বাদ
   if (cs.length < 120) throw new Error("যথেষ্ট ডেটা নেই");
   const ind = indicators(cs);
@@ -226,32 +291,127 @@ function analyze(pair, candles) {
   const dir = signal === "BUY" ? 1 : signal === "SELL" ? -1 : 0;
   const d = decimalsFor(pair);
   const price = ind.c[i], a = ind.atr[i];
-  const stats = backtest(ind);
+  const costOf = k => (spreadPips * pip) / (ind.atr[k] * CFG.slMult);
+  const stats = backtest(ind, costOf);
+  const span = (parseT(cs[i].t) - parseT(cs[0].t)) / 3600000;
   return {
-    pair, signal, score: Math.round(score * 100) / 100,
+    mode: "fx", pair, signal, score: Math.round(score * 100) / 100,
     price: +price.toFixed(d), decimals: d,
     entry: dir ? +price.toFixed(d) : null,
     sl: dir ? +(price - dir * a * CFG.slMult).toFixed(d) : null,
     tp: dir ? +(price + dir * a * CFG.tpMult).toFixed(d) : null,
+    slPips: +((a * CFG.slMult) / pip).toFixed(1),
+    spreadPips, spanHours: Number.isFinite(span) ? span : 0,
     candleTime: cs[i].t, stats,
     reliable: stats.trades >= 40 && stats.profitFactor >= 1.5,
+  };
+}
+
+/* ---------- বাইনারি মোড: মেয়াদ শেষে দাম উপরে/নিচে ---------- */
+/* উইলসন ৯৫% সীমা: ছোট নমুনায় জয়ের হার কতটা অনির্ভরযোগ্য তা দেখায়। */
+function wilson(w, n, z = 1.96) {
+  if (!n) return [0, 1];
+  const p = w / n, d = 1 + (z * z) / n, c = p + (z * z) / (2 * n);
+  const m = z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n));
+  return [(c - m) / d, (c + m) / d];
+}
+
+/* সিগন্যালের ক্যান্ডেল বন্ধে ঢুকে expiry ক্যান্ডেল পরের ক্লোজে ফল। দাম সমান হলে ট্রেড ফেরত (গোনা হয় না)। */
+function binaryBacktest(ind, expiry, payoutPct) {
+  let wins = 0, n = 0, next = 60;
+  for (let i = 60; i < ind.c.length - expiry; i++) {
+    if (i < next) continue;
+    const sg = signalOf(scoreAt(ind, i));
+    if (sg === "HOLD") continue;
+    const dir = sg === "BUY" ? 1 : -1;
+    const move = (ind.c[i + expiry] - ind.c[i]) * dir;
+    next = i + expiry;                           // ট্রেড চলাকালে নতুন ট্রেড নয়
+    if (move === 0) continue;
+    n++;
+    if (move > 0) wins++;
+  }
+  const payout = payoutPct / 100;
+  const breakEven = 1 / (1 + payout);
+  const wr = n ? wins / n : 0;
+  const [lo, hi] = wilson(wins, n);
+  return {
+    trades: n, wins,
+    winRate: Math.round(wr * 1000) / 10,
+    lo: Math.round(lo * 1000) / 10, hi: Math.round(hi * 1000) / 10,
+    breakEven: Math.round(breakEven * 1000) / 10,
+    ev: Math.round((wr * payout - (1 - wr)) * 1000) / 1000,   // প্রতি ১ টাকায় গড় লাভ/লস
+    edgeProven: n >= 100 && lo > breakEven,
+  };
+}
+
+function analyzeBinary(pair, candles, opts = {}) {
+  const expiry = opts.expiry || 1, payout = opts.payout || 85;
+  const cs = candles.slice(0, -1);
+  if (cs.length < 120) throw new Error("যথেষ্ট ডেটা নেই");
+  const ind = indicators(cs);
+  const i = cs.length - 1;
+  const score = scoreAt(ind, i);
+  const d = decimalsFor(pair);
+  const span = (parseT(cs[i].t) - parseT(cs[0].t)) / 3600000;
+  return {
+    mode: "bin", pair, signal: signalOf(score), score: Math.round(score * 100) / 100,
+    price: +ind.c[i].toFixed(d), decimals: d, expiry, payout,
+    spanHours: Number.isFinite(span) ? span : 0,
+    candleTime: cs[i].t, bin: binaryBacktest(ind, expiry, payout),
   };
 }
 /*CORE-END*/
 
 /* ---------- অ্যাপের অংশ ---------- */
-const PAIRS = ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD", "USD/CAD", "USD/CHF"];
-const CACHE_MIN = 30;
+const ALL_PAIRS = ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD", "USD/CAD", "USD/CHF"];
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const bn = n => String(n).replace(/\d/g, d => "০১২৩৪৫৬৭৮৯"[d]);
 
 function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
+function readJson(k, fallback) { try { const v = JSON.parse(store(k) || "null"); return v === null ? fallback : v; } catch (e) { return fallback; } }
 
 let busy = false;
+const mem = {};   // সেশনের ভেতরে আনা ক্যান্ডেল: সেটিং বদলালে নতুন করে ডেটা না এনে হিসাব আবার চালানো যায়
 
-async function fetchPair(sym, key) {
+/* --- সেটিং --- */
+function curMode() { return store("fx_mode") === "fx" ? "fx" : "bin"; }
+function curTf() { const t = store("fx_tf"); return TFS[t] ? t : "1min"; }
+function selectedPairs() {
+  const saved = readJson("fx_pairs", null);
+  if (Array.isArray(saved) && saved.length) return ALL_PAIRS.filter(p => saved.includes(p));
+  return curTf() === "1h" || curTf() === "15min" ? ALL_PAIRS.slice() : ["EUR/USD"];
+}
+function spreadPips() { const v = parseFloat(store("fx_spread")); return Number.isFinite(v) && v >= 0 ? v : 1; }
+function expiryN() { const v = parseInt(store("fx_expiry"), 10); return [1, 2, 3, 5].includes(v) ? v : 1; }
+function payoutPct() { const v = parseFloat(store("fx_payout")); return Number.isFinite(v) && v >= 50 && v <= 100 ? v : 85; }
+function sig() { return curMode() === "bin" ? "b|" + expiryN() + "|" + payoutPct() : "f|" + spreadPips(); }
+function analyzeFor(name, candles) {
+  return curMode() === "bin"
+    ? analyzeBinary(name, candles, { expiry: expiryN(), payout: payoutPct() })
+    : analyze(name, candles, { spreadPips: spreadPips() });
+}
+function label(signal) {
+  if (curMode() === "bin") return signal === "BUY" ? "CALL ↑" : signal === "SELL" ? "PUT ↓" : "অপেক্ষা";
+  return signal;
+}
+
+/* --- API ব্যবহারের হিসাব (এই ডিভাইস থেকে করা অনুরোধ) --- */
+function usage() {
+  const day = new Date().toISOString().slice(0, 10);
+  const u = readJson("fx_usage", null);
+  return u && u.day === day ? u : { day, n: 0 };
+}
+function bumpUsage() { const u = usage(); u.n += 1; store("fx_usage", JSON.stringify(u)); }
+
+/* --- ক্যাশ: মোড ও টাইমফ্রেম অনুযায়ী আলাদা, প্রতিটি পেয়ারের নিজের সময় ও সেটিং-ছাপ সহ --- */
+function cacheKey(tf) { return "fx_c_" + curMode() + "_" + tf; }
+function loadCache(tf) { return readJson(cacheKey(tf), {}); }
+function saveCache(tf, c) { store(cacheKey(tf), JSON.stringify(c)); }
+
+async function fetchPair(sym, tf, key) {
   const url = "https://api.twelvedata.com/time_series?symbol=" + encodeURIComponent(sym) +
-    "&interval=1h&outputsize=1500&apikey=" + encodeURIComponent(key);
+    "&interval=" + TFS[tf].api + "&outputsize=1500&apikey=" + encodeURIComponent(key);
   const res = await fetch(url);
   const j = await res.json();
   if (j.status === "error" || !Array.isArray(j.values)) {
@@ -262,94 +422,293 @@ async function fetchPair(sym, key) {
   return j.values.slice().reverse().map(v => ({ t: v.datetime, h: +v.high, l: +v.low, c: +v.close }));
 }
 
-async function refreshAll() {
+/* মেমোরিতে ক্যান্ডেল থাকলে সেটিং বদলের পর ডেটা না এনেই হিসাব আবার চালায় */
+function recompute() {
+  const tf = curTf(), cache = loadCache(tf), s = sig();
+  let changed = false;
+  selectedPairs().forEach(p => {
+    const m = mem[tf + "|" + p], e = cache[p];
+    if (!m) return;
+    if (!e || (!e.error && e.sig !== s)) {
+      try {
+        cache[p] = { time: e ? e.time : m.time, result: analyzeFor(p.replace("/", ""), m.candles), sig: s };
+        changed = true;
+      } catch (x) {}
+    }
+  });
+  if (changed) saveCache(tf, cache);
+}
+
+function needs(p, cache, now, ms) {
+  const e = cache[p];
+  if (!e) return true;
+  if (e.error) return now - e.time > 60000;       // এরর হলে ১ মিনিট পর আবার চেষ্টা
+  if (e.sig !== sig()) return true;               // সেটিং বদলেছে আর মেমোরিতে ক্যান্ডেল নেই
+  return isDue(now, e.time, ms);
+}
+
+async function refresh(force) {
   if (busy) return;
   const key = store("fx_key");
   if (!key) { $("setup").hidden = false; return; }
+  const tf = curTf(), ms = TFS[tf].ms, now = Date.now();
+  recompute();
+  const cache = loadCache(tf);
+  const list = selectedPairs().filter(p => force || needs(p, cache, now, ms));
+  if (!list.length) { render(); return; }
+  if (usage().n + list.length > DAILY_LIMIT) {
+    $("status").textContent = "আজকের ফ্রি ডেটা লিমিট প্রায় শেষ, তাই অটো-আপডেট থেমে আছে। পরের দিন আবার চলবে।";
+    return;
+  }
   busy = true;
   $("refresh").disabled = true;
-  const results = [], errors = {};
-  for (let n = 0; n < PAIRS.length; n++) {
-    const sym = PAIRS[n], name = sym.replace("/", "");
-    $("status").textContent = name + " লোড হচ্ছে (" + (n + 1) + "/" + PAIRS.length + ")…";
+  const fresh = [];
+  for (let n = 0; n < list.length; n++) {
+    const sym = list[n], name = sym.replace("/", "");
+    $("status").textContent = name + " লোড হচ্ছে (" + (n + 1) + "/" + list.length + ")…";
     try {
-      results.push(analyze(name, await fetchPair(sym, key)));
+      bumpUsage();
+      const candles = await fetchPair(sym, tf, key);
+      mem[tf + "|" + sym] = { time: Date.now(), candles };
+      const r = analyzeFor(name, candles);
+      const prev = cache[sym] && cache[sym].result;
+      if (prev && r.signal !== "HOLD" && prev.signal !== r.signal) fresh.push(r);
+      cache[sym] = { time: Date.now(), result: r, sig: sig() };
     } catch (e) {
-      errors[name] = e.message;
-      if (e.code === 401 || e.code === 403) {   // key ভুল হলে বাকিগুলো চেষ্টা করে লাভ নেই
-        $("setup").hidden = false;
-        break;
-      }
+      cache[sym] = { time: Date.now(), error: e.message };
+      if (e.code === 401 || e.code === 403) { $("setup").hidden = false; break; }
+      if (e.code === 429) break;                 // মিনিট বা দিনের সীমা ছুঁয়েছে
     }
-    await new Promise(r => setTimeout(r, 700));
+    if (n < list.length - 1) await new Promise(r => setTimeout(r, 700));
+    updateUsage();
   }
-  store("fx_cache", JSON.stringify({ time: Date.now(), results, errors }));
+  saveCache(tf, cache);
   busy = false;
   $("refresh").disabled = false;
   $("status").textContent = "";
   render();
+  if (fresh.length) fireAlerts(fresh);
 }
 
-function card(s) {
-  const d = s.decimals, f = v => (v === null ? "—" : Number(v).toFixed(d));
+/* --- অ্যালার্ট: বীপ, ভাইব্রেট, নোটিফিকেশন --- */
+let actx = null;
+function initAudio() {
+  if (store("fx_alert") !== "1" || actx) return;
+  try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+}
+function beep() {
+  try {
+    if (!actx) return;
+    if (actx.state === "suspended") actx.resume();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.connect(g); g.connect(actx.destination);
+    o.frequency.value = 880; g.gain.value = 0.2;
+    o.start(); o.stop(actx.currentTime + 0.25);
+  } catch (e) {}
+}
+function fireAlerts(list) {
+  const text = list.map(r => r.pair + " " + label(r.signal)).join(" · ");
+  const el = $("alerts");
+  el.hidden = false;
+  el.textContent = "নতুন সিগন্যাল (" + new Date().toLocaleTimeString("bn-BD") + "): " + text;
+  if (store("fx_alert") !== "1") return;
+  beep();
+  try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) {}
+  try {
+    if ("Notification" in window && Notification.permission === "granted" && document.hidden && navigator.serviceWorker) {
+      navigator.serviceWorker.ready.then(reg => reg.showNotification("FX Signals", { body: text, tag: "fx", vibrate: [200, 100, 200] })).catch(() => {});
+    }
+  } catch (e) {}
+}
+
+/* --- স্ক্রিন জাগিয়ে রাখা (ছোট টাইমফ্রেমে অ্যাপ খোলা না থাকলে আপডেট থামে) --- */
+let wake = null;
+function keepAwake() {
+  try {
+    if (curTf() === "1h" || !("wakeLock" in navigator) || document.hidden) return;
+    navigator.wakeLock.request("screen").then(l => { wake = l; }).catch(() => {});
+  } catch (e) {}
+}
+
+/* --- ছবি --- */
+function spanLabel(h) { return h < 48 ? bn(Math.round(h)) + " ঘণ্টা" : bn(Math.round(h / 24)) + " দিন"; }
+
+function meter(s) {
   const pct = Math.round(Math.abs(s.score) * 100);
   const fillStyle = s.score >= 0
     ? "left:50%;width:" + pct / 2 + "%;background:var(--buy)"
     : "right:50%;width:" + pct / 2 + "%;background:var(--sell)";
+  const l = curMode() === "bin" ? ["PUT", "CALL"] : ["SELL", "BUY"];
+  return '<div class="meter"><div class="lbl"><span>' + l[0] + '</span><span>স্কোর ' + (s.score >= 0 ? "+" : "") + s.score.toFixed(2) + '</span><span>' + l[1] + '</span></div>' +
+    '<div class="track"><div class="fill" style="' + fillStyle + '"></div></div></div>';
+}
+
+function fxCard(s) {
+  const d = s.decimals, f = v => (v === null ? "—" : Number(v).toFixed(d));
   const b = s.stats;
-  const tag = b.trades < 40
+  let tags = b.trades < 40
     ? '<span class="tag weak">ট্রেড কম, ব্যাকটেস্ট নির্ভরযোগ্য নয়</span>'
     : s.reliable ? '<span class="tag ok">ব্যাকটেস্ট ইতিবাচক (ভাগ্যেও হতে পারে)</span>' : '<span class="tag weak">ব্যাকটেস্ট দুর্বল, সতর্ক থাকুন</span>';
+  if (s.spreadPips > 0 && s.slPips < s.spreadPips * 3) {
+    tags += '<span class="tag weak">SL স্প্রেডের তুলনায় খুব ছোট</span>';
+  }
   return '<article class="card">' +
-    '<div class="top"><span class="pair">' + esc(s.pair) + '</span><span class="badge ' + s.signal + '">' + s.signal + '</span></div>' +
-    '<div class="price">বর্তমান দাম ' + f(s.price) + '</div>' +
+    '<div class="top"><span class="pair">' + esc(s.pair) + '</span><span class="badge ' + s.signal + '">' + label(s.signal) + '</span></div>' +
+    '<div class="price">শেষ ক্লোজ ' + f(s.price) + ' · SL দূরত্ব ≈ ' + bn(s.slPips) + ' pip</div>' +
     '<div class="levels">' +
       '<div class="lv"><small>Entry</small><b>' + f(s.entry) + '</b></div>' +
       '<div class="lv"><small>Stop Loss</small><b>' + f(s.sl) + '</b></div>' +
       '<div class="lv"><small>Take Profit</small><b>' + f(s.tp) + '</b></div>' +
-    '</div>' +
-    '<div class="meter"><div class="lbl"><span>SELL</span><span>স্কোর ' + (s.score >= 0 ? "+" : "") + s.score.toFixed(2) + '</span><span>BUY</span></div>' +
-      '<div class="track"><div class="fill" style="' + fillStyle + '"></div></div></div>' +
-    '<div class="bt">গত ~২ মাসের ব্যাকটেস্ট: ' + b.trades + ' ট্রেড · উইন রেট ' + b.winRate + '% · Profit Factor ' + b.profitFactor + ' · মোট ' + b.totalR + 'R<br>' + tag + '</div>' +
+    '</div>' + meter(s) +
+    '<div class="bt">গত ' + spanLabel(s.spanHours) + 'র ব্যাকটেস্ট (স্প্রেড ' + bn(s.spreadPips) + ' pip ধরে): ' + b.trades + ' ট্রেড · উইন রেট ' + b.winRate + '% · Profit Factor ' + b.profitFactor + ' · মোট ' + b.totalR + 'R<br>' + tags + '</div>' +
     '</article>';
 }
 
+function binCard(s) {
+  const b = s.bin, tf = TFS[curTf()], mins = s.expiry * tf.min;
+  const cta = s.signal === "HOLD"
+    ? "এখন কোনো ট্রেড নয়, অপেক্ষা করুন"
+    : "পরের ক্যান্ডেল শুরুতে " + (s.signal === "BUY" ? "CALL (উপরে)" : "PUT (নিচে)") + " নিন · মেয়াদ " + bn(mins) + " মিনিট";
+  const tag = b.trades < 100
+    ? '<span class="tag weak">নমুনা কম, জয়ের হারের সীমা অনেক চওড়া</span>'
+    : b.edgeProven
+      ? '<span class="tag ok">ব্রেক-ইভেনের উপরে (ভাগ্যেও হতে পারে)</span>'
+      : '<span class="tag weak">লাভের প্রমাণ নেই</span>';
+  const evTxt = (b.ev >= 0 ? "+" : "") + b.ev.toFixed(3);
+  return '<article class="card">' +
+    '<div class="top"><span class="pair">' + esc(s.pair) + '</span><span class="badge ' + s.signal + '">' + label(s.signal) + '</span></div>' +
+    '<div class="price">শেষ ক্লোজ ' + Number(s.price).toFixed(s.decimals) + '</div>' +
+    '<div class="cta">' + cta + '</div>' + meter(s) +
+    '<div class="bt">গত ' + spanLabel(s.spanHours) + 'র ব্যাকটেস্ট: ' + b.trades + ' ট্রেড · জয় ' + b.winRate + '% (৯৫% সীমা ' + b.lo + '–' + b.hi + '%)<br>' +
+    'ব্রেক-ইভেন ' + b.breakEven + '% (পেআউট ' + bn(s.payout) + '%) · প্রতি ১ টাকায় গড় ' + evTxt + '<br>' + tag + '</div>' +
+    '</article>';
+}
+
+function updateUsage() {
+  $("usage").textContent = "আজকের ডেটা ব্যবহার (এই ফোন থেকে): " + bn(usage().n) + " / " + bn(DAILY_LIMIT);
+  const tf = curTf(), n = selectedPairs().length;
+  const perHour = n * (3600000 / TFS[tf].ms);
+  const hours = DAILY_LIMIT / perHour;
+  $("estimate").textContent = tf === "1h"
+    ? ""
+    : "এই সেটিংয়ে ফ্রি লিমিটে প্রায় " + bn(Math.round(hours * 10) / 10) + " ঘণ্টা অটো-আপডেট চলবে। বেশি সময় চালাতে পেয়ার কমান।";
+}
+
+function renderControls() {
+  const tf = curTf(), sel = selectedPairs(), bin = curMode() === "bin";
+  $("modeSeg").innerHTML =
+    '<button type="button" data-mode="bin" aria-pressed="' + bin + '">বাইনারি অপশন</button>' +
+    '<button type="button" data-mode="fx" aria-pressed="' + !bin + '">ফরেক্স (SL/TP)</button>';
+  $("tfSeg").innerHTML = Object.keys(TFS).map(k =>
+    '<button type="button" data-tf="' + k + '" aria-pressed="' + (k === tf) + '">' + TFS[k].label + '</button>').join("");
+  $("chips").innerHTML = ALL_PAIRS.map(p =>
+    '<button type="button" data-pair="' + p + '" aria-pressed="' + sel.includes(p) + '">' + p + '</button>').join("");
+  $("expirySeg").innerHTML = [1, 2, 3, 5].map(n =>
+    '<button type="button" data-exp="' + n + '" aria-pressed="' + (n === expiryN()) + '">' + bn(n) + ' ক্যান্ডেল = ' + bn(n * TFS[tf].min) + ' মিনিট</button>').join("");
+  $("gExpiry").hidden = !bin;
+  $("gPayout").hidden = !bin;
+  $("gSpread").hidden = bin;
+  $("spread").value = spreadPips();
+  $("payout").value = payoutPct();
+  $("beHint").textContent = "ব্রেক-ইভেন জয়ের হার " + (Math.round(1000 / (1 + payoutPct() / 100)) / 10) + "%";
+  $("alertBtn").setAttribute("aria-pressed", store("fx_alert") === "1");
+  $("notice").textContent = bin
+    ? "এগুলো শিক্ষামূলক সিগন্যাল, আর্থিক পরামর্শ নয়। বাইনারিতে জিততে জয়ের হার ব্রেক-ইভেনের উপরে থাকতে হয়, আর অধিকাংশ ট্রেডার লস করে। যে টাকা হারাতে পারবেন না তা দেবেন না, লস পোষাতে ট্রেডের অঙ্ক বাড়াবেন না। প্ল্যাটফর্মের OTC পেয়ারের দাম আসল মার্কেটের নয়, সেখানে এই সিগন্যাল অর্থহীন। প্ল্যাটফর্ম আপনার দেশে বৈধ কি না নিজে যাচাই করুন।"
+    : "এগুলো শিক্ষামূলক সিগন্যাল, আর্থিক পরামর্শ নয়। কোনো সিগন্যালই লাভের নিশ্চয়তা দেয় না। Entry হলো শেষ বন্ধ হওয়া ক্যান্ডেলের দাম, ব্রোকারে আপনি বর্তমান দামে ঢুকবেন। ছোট টাইমফ্রেমে স্প্রেড লাভের বড় অংশ খেয়ে ফেলে, তাই আগে ডেমোতে পরীক্ষা করুন।";
+  updateUsage();
+}
+
 function render() {
-  let c = null;
-  try { c = JSON.parse(store("fx_cache") || "null"); } catch (e) {}
-  if (!c) {
-    $("meta").textContent = store("fx_key") ? "সিগন্যাল তৈরি হচ্ছে…" : "শুরু করতে API key দিন";
-    return;
-  }
-  const order = PAIRS.map(p => p.replace("/", ""));
-  const cards = c.results.sort((a, b) => order.indexOf(a.pair) - order.indexOf(b.pair)).map(card);
-  Object.keys(c.errors).forEach(k => {
-    cards.push('<article class="card"><div class="top"><span class="pair">' + esc(k) + '</span></div><p class="err">' + esc(c.errors[k]) + '</p></article>');
+  const tf = curTf(), cache = loadCache(tf), sel = selectedPairs();
+  const cards = [];
+  let latest = 0;
+  sel.forEach(p => {
+    const e = cache[p], name = p.replace("/", "");
+    if (!e) { cards.push('<article class="card"><div class="top"><span class="pair">' + esc(name) + '</span></div><p class="muted">সিগন্যাল তৈরি হচ্ছে…</p></article>'); return; }
+    latest = Math.max(latest, e.time);
+    if (e.error) cards.push('<article class="card"><div class="top"><span class="pair">' + esc(name) + '</span></div><p class="err">' + esc(e.error) + '</p></article>');
+    else cards.push(e.result.mode === "bin" ? binCard(e.result) : fxCard(e.result));
   });
   $("grid").innerHTML = cards.join("");
-  $("meta").textContent = "সর্বশেষ আপডেট: " + new Date(c.time).toLocaleString("bn-BD") + " · প্রতি ১ ঘণ্টার ক্যান্ডেল";
+  $("meta").textContent = latest
+    ? TFS[tf].label + " · সর্বশেষ আপডেট " + new Date(latest).toLocaleTimeString("bn-BD")
+    : (store("fx_key") ? "সিগন্যাল তৈরি হচ্ছে…" : "শুরু করতে API key দিন");
+  updateUsage();
 }
 
-function maybeRefresh() {
-  let c = null;
-  try { c = JSON.parse(store("fx_cache") || "null"); } catch (e) {}
-  if (!store("fx_key")) { $("setup").hidden = false; return; }
-  if (!c || Date.now() - c.time > CACHE_MIN * 60000) refreshAll();
+/* --- ইভেন্ট --- */
+function tick() {
+  if (document.hidden || busy || !store("fx_key")) return;
+  refresh(false);
+}
+function settingsChanged() {
+  recompute(); renderControls(); render(); tick();
 }
 
-$("refresh").addEventListener("click", refreshAll);
+$("modeSeg").addEventListener("click", e => {
+  const b = e.target.closest("button[data-mode]");
+  if (!b) return;
+  store("fx_mode", b.dataset.mode);
+  settingsChanged();
+});
+$("tfSeg").addEventListener("click", e => {
+  const b = e.target.closest("button[data-tf]");
+  if (!b) return;
+  store("fx_tf", b.dataset.tf);
+  keepAwake(); settingsChanged();
+});
+$("chips").addEventListener("click", e => {
+  const b = e.target.closest("button[data-pair]");
+  if (!b) return;
+  const cur = selectedPairs(), p = b.dataset.pair;
+  const next = cur.includes(p) ? cur.filter(x => x !== p) : cur.concat(p);
+  if (!next.length) return;                       // অন্তত একটা পেয়ার থাকতে হবে
+  store("fx_pairs", JSON.stringify(next));
+  settingsChanged();
+});
+$("expirySeg").addEventListener("click", e => {
+  const b = e.target.closest("button[data-exp]");
+  if (!b) return;
+  store("fx_expiry", b.dataset.exp);
+  settingsChanged();
+});
+$("payout").addEventListener("change", () => {
+  const v = parseFloat($("payout").value);
+  store("fx_payout", String(Number.isFinite(v) && v >= 50 && v <= 100 ? v : 85));
+  settingsChanged();
+});
+$("spread").addEventListener("change", () => {
+  const v = parseFloat($("spread").value);
+  store("fx_spread", Number.isFinite(v) && v >= 0 ? String(v) : "1");
+  settingsChanged();                               // মেমোরিতে ক্যান্ডেল থাকলে নতুন করে ডেটা আনা লাগে না
+});
+$("refresh").addEventListener("click", () => refresh(true));
+$("alertBtn").addEventListener("click", () => {
+  const on = store("fx_alert") !== "1";
+  store("fx_alert", on ? "1" : "0");
+  $("alertBtn").setAttribute("aria-pressed", on);
+  if (on) {
+    initAudio(); beep();
+    try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch (e) {}
+  }
+});
 $("settings").addEventListener("click", () => { $("setup").hidden = !$("setup").hidden; $("keyInput").value = store("fx_key") || ""; });
 $("saveKey").addEventListener("click", () => {
   const k = $("keyInput").value.trim();
   if (!k) return;
   store("fx_key", k);
   $("setup").hidden = true;
-  refreshAll();
+  refresh(true);
 });
+document.addEventListener("click", initAudio);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { keepAwake(); tick(); } });
 
+renderControls();
 render();
-maybeRefresh();
-setInterval(maybeRefresh, 60000);
+if (!store("fx_key")) $("setup").hidden = false;
+keepAwake();
+tick();
+setInterval(tick, 5000);
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 </script>
