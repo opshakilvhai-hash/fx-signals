@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1511">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>FX Signals</title>
+<style>
+  /* Layout: single column of signal cards on phones, two columns from 700px. Dark-first, light follows the phone setting. */
+  :root {
+    --bg: #0e1511; --surface: #16201a; --inset: #0e1511; --line: #26352c;
+    --text: #e6efe9; --muted: #8fa196;
+    --buy: #3ddc84; --sell: #ff6b5e; --hold: #6f7f75; --warn: #f2b84b;
+    --on-signal: #06120a; --warn-bg: rgba(242,184,75,.12);
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f2f6f3; --surface: #ffffff; --inset: #eef3ef; --line: #d6e0d9;
+      --text: #13201a; --muted: #5a6c61;
+      --buy: #15803d; --sell: #c8352a; --hold: #6b7b71; --warn: #8a5a0b;
+      --on-signal: #ffffff; --warn-bg: rgba(183,121,31,.12);
+      color-scheme: light;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Bengali", sans-serif;
+    padding-inline: 16px;
+    padding-block: max(16px, env(safe-area-inset-top)) max(32px, env(safe-area-inset-bottom));
+  }
+  main { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
+  .muted { color: var(--muted); font-size: 13px; margin: 2px 0 0; }
+  .actions { display: flex; gap: 8px; }
+  button {
+    font: inherit; font-size: 13px; font-weight: 600; color: var(--text);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 12px; cursor: pointer;
+  }
+  button.primary { background: var(--buy); color: var(--on-signal); border-color: transparent; }
+  button:disabled { opacity: .5; cursor: default; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--buy); outline-offset: 2px; }
+  .notice {
+    margin: 0; padding: 10px 12px; border-radius: 8px; font-size: 12.5px; line-height: 1.55;
+    background: var(--warn-bg); color: var(--warn);
+  }
+  #setup { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  #setup h2 { margin: 0; font-size: 16px; }
+  #setup ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+  #setup a { color: var(--buy); }
+  #setup .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  input[type=text] {
+    flex: 1 1 200px; min-width: 0; font: inherit; font-size: 14px; color: var(--text);
+    background: var(--inset); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px;
+  }
+  #status { margin: 0; font-size: 13px; color: var(--muted); }
+  #grid { display: grid; gap: 12px; grid-template-columns: 1fr; }
+  @media (min-width: 700px) { #grid { grid-template-columns: 1fr 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .pair { font-weight: 700; font-size: 17px; letter-spacing: .02em; }
+  .badge { font-weight: 700; font-size: 13px; padding: 3px 12px; border-radius: 6px; color: var(--on-signal); letter-spacing: .04em; }
+  .BUY { background: var(--buy); } .SELL { background: var(--sell); } .HOLD { background: var(--hold); color: #fff; }
+  .price { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .lv { background: var(--inset); border-radius: 8px; padding: 8px 6px; text-align: center; min-width: 0; }
+  .lv small { display: block; color: var(--muted); font-size: 11px; }
+  .lv b { font-size: 13.5px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .meter { display: flex; flex-direction: column; gap: 4px; }
+  .meter .lbl { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+  .track { position: relative; height: 6px; background: var(--inset); border-radius: 3px; }
+  .track::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--line); }
+  .fill { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+  .bt { font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 8px; line-height: 1.6; font-variant-numeric: tabular-nums; }
+  .tag { display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 4px; margin-top: 4px; font-weight: 600; }
+  .ok { color: var(--buy); border: 1px solid var(--buy); }
+  .weak { color: var(--warn); border: 1px solid var(--warn); }
+  .err { color: var(--sell); font-size: 13px; margin: 0; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>FX Signals</h1>
+      <p class="muted" id="meta">লোড হচ্ছে…</p>
+    </div>
+    <div class="actions">
+      <button id="refresh" type="button">রিফ্রেশ</button>
+      <button id="settings" type="button">API Key</button>
+    </div>
+  </header>
+
+  <p class="notice">এগুলো শিক্ষামূলক সিগন্যাল, আর্থিক পরামর্শ নয়। কোনো সিগন্যালই লাভের নিশ্চয়তা দেয় না। রিয়েল টাকায় ট্রেডের আগে ডেমো অ্যাকাউন্টে পরীক্ষা করুন।</p>
+
+  <section id="setup" hidden>
+    <h2>প্রথমবার সেটআপ: ফ্রি ডেটা কী</h2>
+    <ol>
+      <li><a href="https://twelvedata.com" target="_blank" rel="noopener">twelvedata.com</a>-এ ফ্রি অ্যাকাউন্ট খুলুন</li>
+      <li>Dashboard থেকে API key কপি করুন</li>
+      <li>নিচে পেস্ট করে সেভ চাপুন</li>
+    </ol>
+    <div class="row">
+      <input type="text" id="keyInput" placeholder="API key পেস্ট করুন" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <button id="saveKey" class="primary" type="button">সেভ করুন</button>
+    </div>
+    <p class="muted">key শুধু আপনার ফোনের ব্রাউজারে থাকে, কোথাও পাঠানো হয় না (শুধু Twelve Data থেকে ডেটা আনতে ব্যবহার হয়)।</p>
+  </section>
+
+  <p id="status"></p>
+  <section id="grid" aria-live="polite"></section>
+</main>
+
+<script>
+/*CORE-START*/
+const CFG = { slMult: 1.5, tpMult: 3, horizon: 48, cooldown: 12, threshold: 0.45 };
+
+function ema(a, span) {
+  const k = 2 / (span + 1);
+  const out = [a[0]];
+  for (let i = 1; i < a.length; i++) out.push(a[i] * k + out[i - 1] * (1 - k));
+  return out;
+}
+function wilder(a, n) {
+  const k = 1 / n;
+  const out = [a[0]];
+  for (let i = 1; i < a.length; i++) out.push(a[i] * k + out[i - 1] * (1 - k));
+  return out;
+}
+function rsiSeries(c, n = 14) {
+  const g = [0], l = [0];
+  for (let i = 1; i < c.length; i++) {
+    const d = c[i] - c[i - 1];
+    g.push(Math.max(d, 0));
+    l.push(Math.max(-d, 0));
+  }
+  const ag = wilder(g, n), al = wilder(l, n);
+  return ag.map((x, i) => (al[i] === 0 ? (x === 0 ? 50 : 100) : 100 - 100 / (1 + x / al[i])));
+}
+function atrSeries(h, l, c, n = 14) {
+  const tr = [h[0] - l[0]];
+  for (let i = 1; i < c.length; i++) {
+    tr.push(Math.max(h[i] - l[i], Math.abs(h[i] - c[i - 1]), Math.abs(l[i] - c[i - 1])));
+  }
+  return wilder(tr, n);
+}
+function indicators(cs) {
+  const h = cs.map(x => x.h), l = cs.map(x => x.l), c = cs.map(x => x.c);
+  const e20 = ema(c, 20), e50 = ema(c, 50);
+  const e12 = ema(c, 12), e26 = ema(c, 26);
+  const macd = e12.map((v, i) => v - e26[i]);
+  const sig = ema(macd, 9);
+  const hist = macd.map((v, i) => v - sig[i]);
+  return { c, h, l, e20, e50, hist, rsi: rsiSeries(c), atr: atrSeries(h, l, c) };
+}
+const clip = (x, a = -1, b = 1) => Math.max(a, Math.min(b, x));
+
+/* স্কোর: -1 (জোরালো SELL) থেকে +1 (জোরালো BUY)। ট্রেন্ড ৫০%, MACD গতি ৩০%, RSI ২০%। */
+function scoreAt(ind, i) {
+  const a = ind.atr[i];
+  if (!(a > 0)) return 0;
+  const t = clip((ind.e20[i] - ind.e50[i]) / a);
+  const m = clip((ind.hist[i] / a) * 5);
+  const r = clip((ind.rsi[i] - 50) / 20);
+  let s = 0.5 * t + 0.3 * m + 0.2 * r;
+  if (s > 0 && ind.rsi[i] > 75) s = 0;   // অতিরিক্ত কেনা: BUY নয়
+  if (s < 0 && ind.rsi[i] < 25) s = 0;   // অতিরিক্ত বেচা: SELL নয়
+  return s;
+}
+function signalOf(s) { return s >= CFG.threshold ? "BUY" : s <= -CFG.threshold ? "SELL" : "HOLD"; }
+
+/* একটা ট্রেডের ফল R-এ। SL = -1R, TP = +2R। একই ক্যান্ডেলে দুটোই ছুঁলে SL ধরা হয়। */
+function simulate(ind, i, dir) {
+  const entry = ind.c[i], a = ind.atr[i];
+  const sl = entry - dir * a * CFG.slMult, tp = entry + dir * a * CFG.tpMult;
+  if (i + 1 >= ind.c.length) return null;
+  const end = Math.min(i + 1 + CFG.horizon, ind.c.length);
+  for (let j = i + 1; j < end; j++) {
+    const hitSl = dir === 1 ? ind.l[j] <= sl : ind.h[j] >= sl;
+    const hitTp = dir === 1 ? ind.h[j] >= tp : ind.l[j] <= tp;
+    if (hitSl) return -1;
+    if (hitTp) return CFG.tpMult / CFG.slMult;
+  }
+  return (dir * (ind.c[end - 1] - entry)) / (a * CFG.slMult);
+}
+
+function backtest(ind) {
+  const res = [];
+  let next = 60;
+  for (let i = 60; i < ind.c.length - 1; i++) {
+    if (i < next) continue;
+    const sg = signalOf(scoreAt(ind, i));
+    if (sg === "HOLD") continue;
+    const r = simulate(ind, i, sg === "BUY" ? 1 : -1);
+    if (r === null) continue;
+    res.push(r);
+    next = i + CFG.cooldown;
+  }
+  if (!res.length) return { trades: 0, winRate: 0, profitFactor: 0, totalR: 0 };
+  const wins = res.filter(x => x > 0).reduce((a, b) => a + b, 0);
+  const losses = Math.abs(res.filter(x => x < 0).reduce((a, b) => a + b, 0));
+  return {
+    trades: res.length,
+    winRate: Math.round((res.filter(x => x > 0).length / res.length) * 1000) / 10,
+    profitFactor: losses > 0 ? Math.round((wins / losses) * 100) / 100 : 99,
+    totalR: Math.round(res.reduce((a, b) => a + b, 0) * 10) / 10,
+  };
+}
+
+function decimalsFor(pair) { return pair.includes("JPY") ? 3 : 5; }
+
+function analyze(pair, candles) {
+  const cs = candles.slice(0, -1);              // শেষ ক্যান্ডেল চলমান, তাই বাদ
+  if (cs.length < 120) throw new Error("যথেষ্ট ডেটা নেই");
+  const ind = indicators(cs);
+  const i = cs.length - 1;
+  const score = scoreAt(ind, i);
+  const signal = signalOf(score);
+  const dir = signal === "BUY" ? 1 : signal === "SELL" ? -1 : 0;
+  const d = decimalsFor(pair);
+  const price = ind.c[i], a = ind.atr[i];
+  const stats = backtest(ind);
+  return {
+    pair, signal, score: Math.round(score * 100) / 100,
+    price: +price.toFixed(d), decimals: d,
+    entry: dir ? +price.toFixed(d) : null,
+    sl: dir ? +(price - dir * a * CFG.slMult).toFixed(d) : null,
+    tp: dir ? +(price + dir * a * CFG.tpMult).toFixed(d) : null,
+    candleTime: cs[i].t, stats,
+    reliable: stats.trades >= 40 && stats.profitFactor >= 1.5,
+  };
+}
+/*CORE-END*/
+
+/* ---------- অ্যাপের অংশ ---------- */
+const PAIRS = ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD", "USD/CAD", "USD/CHF"];
+const CACHE_MIN = 30;
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
+
+let busy = false;
+
+async function fetchPair(sym, key) {
+  const url = "https://api.twelvedata.com/time_series?symbol=" + encodeURIComponent(sym) +
+    "&interval=1h&outputsize=1500&apikey=" + encodeURIComponent(key);
+  const res = await fetch(url);
+  const j = await res.json();
+  if (j.status === "error" || !Array.isArray(j.values)) {
+    const err = new Error(j.message || "ডেটা আসেনি");
+    err.code = j.code;
+    throw err;
+  }
+  return j.values.slice().reverse().map(v => ({ t: v.datetime, h: +v.high, l: +v.low, c: +v.close }));
+}
+
+async function refreshAll() {
+  if (busy) return;
+  const key = store("fx_key");
+  if (!key) { $("setup").hidden = false; return; }
+  busy = true;
+  $("refresh").disabled = true;
+  const results = [], errors = {};
+  for (let n = 0; n < PAIRS.length; n++) {
+    const sym = PAIRS[n], name = sym.replace("/", "");
+    $("status").textContent = name + " লোড হচ্ছে (" + (n + 1) + "/" + PAIRS.length + ")…";
+    try {
+      results.push(analyze(name, await fetchPair(sym, key)));
+    } catch (e) {
+      errors[name] = e.message;
+      if (e.code === 401 || e.code === 403) {   // key ভুল হলে বাকিগুলো চেষ্টা করে লাভ নেই
+        $("setup").hidden = false;
+        break;
+      }
+    }
+    await new Promise(r => setTimeout(r, 700));
+  }
+  store("fx_cache", JSON.stringify({ time: Date.now(), results, errors }));
+  busy = false;
+  $("refresh").disabled = false;
+  $("status").textContent = "";
+  render();
+}
+
+function card(s) {
+  const d = s.decimals, f = v => (v === null ? "—" : Number(v).toFixed(d));
+  const pct = Math.round(Math.abs(s.score) * 100);
+  const fillStyle = s.score >= 0
+    ? "left:50%;width:" + pct / 2 + "%;background:var(--buy)"
+    : "right:50%;width:" + pct / 2 + "%;background:var(--sell)";
+  const b = s.stats;
+  const tag = b.trades < 40
+    ? '<span class="tag weak">ট্রেড কম, ব্যাকটেস্ট নির্ভরযোগ্য নয়</span>'
+    : s.reliable ? '<span class="tag ok">ব্যাকটেস্ট ইতিবাচক (ভাগ্যেও হতে পারে)</span>' : '<span class="tag weak">ব্যাকটেস্ট দুর্বল, সতর্ক থাকুন</span>';
+  return '<article class="card">' +
+    '<div class="top"><span class="pair">' + esc(s.pair) + '</span><span class="badge ' + s.signal + '">' + s.signal + '</span></div>' +
+    '<div class="price">বর্তমান দাম ' + f(s.price) + '</div>' +
+    '<div class="levels">' +
+      '<div class="lv"><small>Entry</small><b>' + f(s.entry) + '</b></div>' +
+      '<div class="lv"><small>Stop Loss</small><b>' + f(s.sl) + '</b></div>' +
+      '<div class="lv"><small>Take Profit</small><b>' + f(s.tp) + '</b></div>' +
+    '</div>' +
+    '<div class="meter"><div class="lbl"><span>SELL</span><span>স্কোর ' + (s.score >= 0 ? "+" : "") + s.score.toFixed(2) + '</span><span>BUY</span></div>' +
+      '<div class="track"><div class="fill" style="' + fillStyle + '"></div></div></div>' +
+    '<div class="bt">গত ~২ মাসের ব্যাকটেস্ট: ' + b.trades + ' ট্রেড · উইন রেট ' + b.winRate + '% · Profit Factor ' + b.profitFactor + ' · মোট ' + b.totalR + 'R<br>' + tag + '</div>' +
+    '</article>';
+}
+
+function render() {
+  let c = null;
+  try { c = JSON.parse(store("fx_cache") || "null"); } catch (e) {}
+  if (!c) {
+    $("meta").textContent = store("fx_key") ? "সিগন্যাল তৈরি হচ্ছে…" : "শুরু করতে API key দিন";
+    return;
+  }
+  const order = PAIRS.map(p => p.replace("/", ""));
+  const cards = c.results.sort((a, b) => order.indexOf(a.pair) - order.indexOf(b.pair)).map(card);
+  Object.keys(c.errors).forEach(k => {
+    cards.push('<article class="card"><div class="top"><span class="pair">' + esc(k) + '</span></div><p class="err">' + esc(c.errors[k]) + '</p></article>');
+  });
+  $("grid").innerHTML = cards.join("");
+  $("meta").textContent = "সর্বশেষ আপডেট: " + new Date(c.time).toLocaleString("bn-BD") + " · প্রতি ১ ঘণ্টার ক্যান্ডেল";
+}
+
+function maybeRefresh() {
+  let c = null;
+  try { c = JSON.parse(store("fx_cache") || "null"); } catch (e) {}
+  if (!store("fx_key")) { $("setup").hidden = false; return; }
+  if (!c || Date.now() - c.time > CACHE_MIN * 60000) refreshAll();
+}
+
+$("refresh").addEventListener("click", refreshAll);
+$("settings").addEventListener("click", () => { $("setup").hidden = !$("setup").hidden; $("keyInput").value = store("fx_key") || ""; });
+$("saveKey").addEventListener("click", () => {
+  const k = $("keyInput").value.trim();
+  if (!k) return;
+  store("fx_key", k);
+  $("setup").hidden = true;
+  refreshAll();
+});
+
+render();
+maybeRefresh();
+setInterval(maybeRefresh, 60000);
+
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
